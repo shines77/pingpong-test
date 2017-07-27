@@ -30,7 +30,7 @@ func handleConnection(conn net.Conn) {
 			}
 			_, err1 := writer.Write(buf[pos:end])
 			if err1 != nil {
-				fmt.Println("write error: ", err)
+				fmt.Println("write error: ", err1)
 				return
 			}
 		}
