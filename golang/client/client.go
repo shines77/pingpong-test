@@ -71,10 +71,12 @@ func parse_args() {
 func ping(pipeline int, times int, lockChan chan bool) {
 	tcpAddr, err := net.ResolveTCPAddr(*__protocol, __tcpAddr)
 	if err != nil {
+		log.Fatal("get TCP error: ", err)
 		panic(err)
 	}
 	conn, err := net.DialTCP(*__protocol, nil, tcpAddr)
 	if err != nil {
+		log.Fatal("get DialTCP error: ", err)
 		panic(err)
 	}
 
@@ -152,6 +154,7 @@ func main() {
 
 	tcpAddr, err := net.ResolveTCPAddr(*__protocol, __tcpAddr)
 	if err != nil {
+		log.Fatal("get TCP error: ", err)
 		panic(err)
 	}
 	fmt.Printf("Protocol: %s, Host: %s, Port: %d\n", tcpAddr.Network(), tcpAddr.IP.String(), tcpAddr.Port)
