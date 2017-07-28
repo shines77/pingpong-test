@@ -17,6 +17,7 @@ var __processors *int
 var __protocol *string
 var __hostIP *string
 var __hostPort *int
+var __pipeline *int
 var __nodelay_str *string
 var __nodelay bool
 var __tcpAddr string
@@ -26,6 +27,7 @@ func init() {
 	__protocol = flag.String("protocol", "tcp4", "The network type of host.")
 	__hostIP = flag.String("host", "", "The IP address or domain name of host.")
 	__hostPort = flag.Int("port", 5178, "The port of host.")
+	__pipeline = flag.Int("pipeline", 1, "The pipeline of ping one time.")
 	__nodelay_str = flag.String("nodelay", "true", "Whether TCP use nodelay mode, options is [0,1] or [true,false].")
 }
 
@@ -34,6 +36,9 @@ func init_args() {
 		__tcpAddr = fmt.Sprintf(":%d", *__hostPort)
 	} else {
 		__tcpAddr = fmt.Sprintf("%s:%d", *__hostIP, *__hostPort)
+	}
+	if *__pipeline <= 0 {
+		*__pipeline = 1
 	}
 	__nodelay = parseBool(__nodelay_str, false)
 }
@@ -44,6 +49,7 @@ func print_args() {
 	fmt.Printf("protocol: %s\n", formatString(__protocol))
 	fmt.Printf("host: %s\n", formatString(__hostIP))
 	fmt.Printf("port: %d\n", *__hostPort)
+	fmt.Printf("pipeline: %d\n", *__pipeline)
 	fmt.Printf("nodelay: %s\n", strconv.FormatBool(__nodelay))
 	fmt.Printf("other args: %s\n", flag.Args())
 	fmt.Printf("tcp addr: %s\n", __tcpAddr)
@@ -61,7 +67,7 @@ func parse_args() {
 	}
 }
 
-func handleClient(conn net.Conn) {
+func handleClient(conn net.Conn, pipeline int) {
 	defer conn.Close()
 
 	tcp := conn.(*net.TCPConn)
@@ -73,15 +79,34 @@ func handleClient(conn net.Conn) {
 	}
 
 	var buf [4]byte
-	for {
-		n, err := conn.Read(buf[0:])
-		if err != nil {
-			return
-		}
-		if n > 0 {
-			_, err = conn.Write([]byte("Pong"))
+
+	if pipeline == 1 {
+		for {
+			n, err := conn.Read(buf[0:])
 			if err != nil {
 				return
+			}
+			if n > 0 {
+				_, err = conn.Write([]byte("Pong"))
+				if err != nil {
+					return
+				}
+			}
+		}
+	} else {
+		for {
+			for j := 0; j < pipeline; j++ {
+				_, err := conn.Read(buf[0:])
+				if err != nil {
+					return
+				}
+			}
+
+			for j := 0; j < pipeline; j++ {
+				_, err := conn.Write([]byte("Pong"))
+				if err != nil {
+					return
+				}
 			}
 		}
 	}
@@ -113,11 +138,12 @@ func main() {
 	fmt.Printf("\n")
 	fmt.Printf("Listening %s %s ...", listener.Addr().Network(), listener.Addr().String())
 
+	pipeline := *__pipeline
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			log.Fatal("get client connection error: ", err)
 		}
-		go handleClient(conn)
+		go handleClient(conn, pipeline)
 	}
 }

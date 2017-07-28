@@ -18,6 +18,7 @@ var __processors *int
 var __protocol *string
 var __hostIP *string
 var __hostPort *int
+var __pipeline *int
 var __nodelay_str *string
 var __nodelay bool
 var __tcpAddr string
@@ -27,6 +28,7 @@ func init() {
 	__protocol = flag.String("protocol", "tcp4", "The network type of host.")
 	__hostIP = flag.String("host", "localhost", "The IP address or domain name of host.")
 	__hostPort = flag.Int("port", 5178, "The port of host.")
+	__pipeline = flag.Int("pipeline", 1, "The pipeline of ping one time.")
 	__nodelay_str = flag.String("nodelay", "true", "Whether TCP use nodelay mode, options is [0,1] or [true,false].")
 }
 
@@ -35,6 +37,9 @@ func init_args() {
 		__tcpAddr = fmt.Sprintf(":%d", *__hostPort)
 	} else {
 		__tcpAddr = fmt.Sprintf("%s:%d", *__hostIP, *__hostPort)
+	}
+	if *__pipeline <= 0 {
+		*__pipeline = 1
 	}
 	__nodelay = parseBool(__nodelay_str, false)
 }
@@ -45,6 +50,7 @@ func print_args() {
 	fmt.Printf("protocol: %s\n", formatString(__protocol))
 	fmt.Printf("host: %s\n", formatString(__hostIP))
 	fmt.Printf("port: %d\n", *__hostPort)
+	fmt.Printf("pipeline: %d\n", *__pipeline)
 	fmt.Printf("nodelay: %s\n", strconv.FormatBool(__nodelay))
 	fmt.Printf("other args: %s\n", flag.Args())
 	//fmt.Printf("tcp addr: %s\n", __tcpAddr)
@@ -62,7 +68,7 @@ func parse_args() {
 	}
 }
 
-func ping(times int, lockChan chan bool) {
+func ping(pipeline int, times int, lockChan chan bool) {
 	tcpAddr, err := net.ResolveTCPAddr(*__protocol, __tcpAddr)
 	if err != nil {
 		panic(err)
@@ -79,24 +85,50 @@ func ping(times int, lockChan chan bool) {
 		}
 	}
 
-	for i := 0; i < times; i++ {
-		write_bytes, err := conn.Write([]byte("Ping"))
-		if err != nil {
-			log.Fatal("get client write error: ", err)
-		}
-		var buff [4]byte
-		if write_bytes > 0 {
-			read_bytes, err := conn.Read(buff[0:])
-			if read_bytes <= 0 {
-				log.Fatal("Err: client read ", read_bytes, " bytes")
-			}
+	if pipeline == 1 {
+		for i := 0; i < times; i++ {
+			nwrite, err := conn.Write([]byte("Ping"))
 			if err != nil {
-				log.Fatal("get client read error: ", err)
+				log.Fatal("get client write error: ", err)
+			}
+			var buff [4]byte
+			if nwrite > 0 {
+				nread, err := conn.Read(buff[0:])
+				if nread <= 0 {
+					log.Fatal("Err: client read ", nread, " bytes")
+				}
+				if err != nil {
+					log.Fatal("get client read error: ", err)
+				}
 			}
 		}
+		lockChan <- true
+		conn.Close()
+	} else {
+		for i := 0; i < times; i++ {
+			for j := 0; j < pipeline; j++ {
+				nwrite, err := conn.Write([]byte("Ping"))
+				if nwrite <= 0 {
+					log.Fatal("Error: client write ", nwrite, " bytes")
+				}
+				if err != nil {
+					log.Fatal("get client write error: ", err)
+				}
+			}
+			var buff [4]byte
+			for j := 0; j < pipeline; j++ {
+				nread, err := conn.Read(buff[0:])
+				if nread <= 0 {
+					log.Fatal("Error: client read ", nread, " bytes")
+				}
+				if err != nil {
+					log.Fatal("get client read error: ", err)
+				}
+			}
+		}
+		lockChan <- true
+		conn.Close()
 	}
-	lockChan <- true
-	conn.Close()
 }
 
 func main() {
@@ -110,11 +142,12 @@ func main() {
 	}
 	fmt.Printf("\n")
 
+	var pipeline int = *__pipeline
 	// var totalPings int = 1000000
 	var totalPings int = 300000
 	var concurrentConnections int = 100
-	var pingsPerConnection int = totalPings / concurrentConnections
-	var actualTotalPings int = pingsPerConnection * concurrentConnections
+	var pingsPerConnection int = totalPings / (concurrentConnections * pipeline)
+	var actualTotalPings int = pingsPerConnection * concurrentConnections * pipeline
 	lockChan := make(chan bool, concurrentConnections)
 
 	tcpAddr, err := net.ResolveTCPAddr(*__protocol, __tcpAddr)
@@ -126,7 +159,7 @@ func main() {
 
 	start := time.Now()
 	for i := 0; i < concurrentConnections; i++ {
-		go ping(pingsPerConnection, lockChan)
+		go ping(pipeline, pingsPerConnection, lockChan)
 	}
 	for i := 0; i < concurrentConnections; i++ {
 		<-lockChan

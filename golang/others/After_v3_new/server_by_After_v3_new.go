@@ -40,17 +40,21 @@ func handleConnection(conn net.Conn) {
 				return
 			}
 		}
-
 	}()
 
 	buf := make([]byte, 8192)
 	for {
 		n, err := reader.Read(buf)
-		if err != nil {
-			fmt.Println("read error: ", err)
-			return
+		//fmt.Printf("Read: n = %d\n", n)
+		if n != 0 {
+			if err != nil {
+				fmt.Println("read error: ", err)
+				return
+			}
+			tmpChan <- buf[0:n]
+		} else {
+			break
 		}
-		tmpChan <- buf[0:n]
 	}
 }
 
