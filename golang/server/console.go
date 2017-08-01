@@ -6,25 +6,25 @@ import (
 	"os"
 )
 
-func readin() {
+func Readin() {
 	reader := bufio.NewReader(os.Stdin)
 	reader.ReadString('\n')
 }
 
-func readin_echo() {
+func ReadinEcho() {
 	reader := bufio.NewReader(os.Stdin)
 	input, _ := reader.ReadString('\n')
 
 	fmt.Printf("Input First Char Is : %v\n", string([]byte(input)[0]))
 }
 
-func waitEnter() {
+func WaitEnter() {
 	fmt.Print("Press [Enter] key to continue ...")
-	readin()
+	Readin()
 }
 
-func waitEnterLn() {
+func WaitEnterln() {
 	fmt.Print("Press [Enter] key to continue ...")
-	readin()
+	Readin()
 	fmt.Print("\n")
 }

@@ -8,62 +8,69 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
 )
 
-var __processors *int
-var __protocol *string
-var __hostIP *string
-var __hostPort *int
-var __pipeline *int
-var __nodelay_str *string
-var __nodelay bool
-var __tcpAddr string
+type FlagConfig struct {
+	processors  int
+	protocol    string
+	host        string
+	port        int
+	tcpAddr     string
+	pipeline    int
+	nodelay_str string
+	nodelay     bool
+	args        []string
+}
+
+var flagConfig FlagConfig
 
 func init() {
-	__processors = flag.Int("thread-num", -1, "The number of work thread.")
-	__protocol = flag.String("protocol", "tcp4", "The network type of host.")
-	__hostIP = flag.String("host", "", "The IP address or domain name of host.")
-	__hostPort = flag.Int("port", 5178, "The port of host.")
-	__pipeline = flag.Int("pipeline", 1, "The pipeline of ping one time.")
-	__nodelay_str = flag.String("nodelay", "true", "Whether TCP use nodelay mode, options is [0,1] or [true,false].")
+	flag.IntVar(&flagConfig.processors, "thread-num", -1, "The number of work thread.")
+	flag.StringVar(&flagConfig.protocol, "protocol", "tcp4", "The network type of host.")
+	flag.StringVar(&flagConfig.host, "host", "", "The IP address or domain name of host.")
+	flag.IntVar(&flagConfig.port, "port", 5178, "The port of host.")
+	flag.IntVar(&flagConfig.pipeline, "pipeline", 1, "The pipeline of ping one time.")
+	flag.StringVar(&flagConfig.nodelay_str, "nodelay", "false", "TCP is setting nodelay mode? options is [0,1] or [true,false].")
 }
 
-func init_args() {
-	if strings.TrimSpace(*__hostIP) == "" {
-		__tcpAddr = fmt.Sprintf(":%d", *__hostPort)
+func initArgs() {
+	if strings.TrimSpace(flagConfig.host) == "" {
+		flagConfig.tcpAddr = fmt.Sprintf(":%d", flagConfig.port)
 	} else {
-		__tcpAddr = fmt.Sprintf("%s:%d", *__hostIP, *__hostPort)
+		flagConfig.tcpAddr = fmt.Sprintf("%s:%d", flagConfig.host, flagConfig.port)
 	}
-	if *__pipeline <= 0 {
-		*__pipeline = 1
+	if flagConfig.pipeline <= 0 {
+		flagConfig.pipeline = 1
 	}
-	__nodelay = parseBool(__nodelay_str, false)
+	flagConfig.nodelay = parseBool(&flagConfig.nodelay_str, false)
+	flagConfig.args = flag.Args()
 }
 
-func print_args() {
+func printArgs() {
 	fmt.Printf("The input arguments:\n\n")
-	fmt.Printf("thread-num: %d\n", *__processors)
-	fmt.Printf("protocol: %s\n", formatString(__protocol))
-	fmt.Printf("host: %s\n", formatString(__hostIP))
-	fmt.Printf("port: %d\n", *__hostPort)
-	fmt.Printf("pipeline: %d\n", *__pipeline)
-	fmt.Printf("nodelay: %s\n", strconv.FormatBool(__nodelay))
-	fmt.Printf("other args: %s\n", flag.Args())
-	fmt.Printf("tcp addr: %s\n", __tcpAddr)
+	fmt.Printf("thread-num: %d\n", flagConfig.processors)
+	fmt.Printf("protocol: %s\n", formatString(&flagConfig.protocol))
+	fmt.Printf("host: %s\n", formatString(&flagConfig.host))
+	fmt.Printf("port: %d\n", flagConfig.port)
+	fmt.Printf("pipeline: %d\n", flagConfig.pipeline)
+	fmt.Printf("nodelay: %s\n", strconv.FormatBool(flagConfig.nodelay))
+	fmt.Printf("other args: %s\n", flagConfig.args)
+	fmt.Printf("tcp addr: %s\n", flagConfig.tcpAddr)
 	fmt.Printf("\n")
 }
 
-func parse_args() {
+func parseArgs() {
 	flag.Parse()
-	init_args()
-	print_args()
+	initArgs()
+	printArgs()
 
-	if *__hostPort <= 0 && *__hostPort > 65535 {
-		fmt.Errorf("The port out of range [1, 65535]: %d\n", *__hostPort)
-		return
+	if flagConfig.port <= 0 && flagConfig.port > 65535 {
+		fmt.Errorf("The port out of range [1, 65535]: %d\n", flagConfig.port)
+		os.Exit(1)
 	}
 }
 
@@ -72,9 +79,9 @@ func handleClient(conn net.Conn, pipeline int) {
 
 	tcp := conn.(*net.TCPConn)
 	if tcp != nil {
-		err := tcp.SetNoDelay(__nodelay)
+		err := tcp.SetNoDelay(flagConfig.nodelay)
 		if err != nil {
-			log.Fatal("client tcp.SetNoDelay(", __nodelay, ") error: ", err)
+			log.Fatal("client tcp.SetNoDelay(", flagConfig.nodelay, ") error: ", err)
 		}
 	}
 
@@ -113,22 +120,22 @@ func handleClient(conn net.Conn, pipeline int) {
 }
 
 func main() {
-	parse_args()
+	parseArgs()
 
-	fullProcessors := runtime.GOMAXPROCS(*__processors)
-	if *__processors <= 0 {
+	fullProcessors := runtime.GOMAXPROCS(flagConfig.processors)
+	if flagConfig.processors <= 0 {
 		fmt.Printf("Processors: %d / %d\n", fullProcessors, fullProcessors)
 	} else {
-		fmt.Printf("Processors: %d / %d\n", *__processors, fullProcessors)
+		fmt.Printf("Processors: %d / %d\n", flagConfig.processors, fullProcessors)
 	}
 	fmt.Printf("\n")
 
-	tcpAddr, err := net.ResolveTCPAddr(*__protocol, __tcpAddr)
+	tcpAddr, err := net.ResolveTCPAddr(flagConfig.protocol, flagConfig.tcpAddr)
 	if err != nil {
 		log.Fatal("get TCP error: ", err)
 		panic(err)
 	}
-	listener, err := net.ListenTCP(*__protocol, tcpAddr)
+	listener, err := net.ListenTCP(flagConfig.protocol, tcpAddr)
 	if err != nil {
 		log.Fatal("get listen error: ", err)
 		panic(err)
@@ -138,7 +145,7 @@ func main() {
 	fmt.Printf("\n")
 	fmt.Printf("Listening %s %s ...", listener.Addr().Network(), listener.Addr().String())
 
-	pipeline := *__pipeline
+	pipeline := flagConfig.pipeline
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
