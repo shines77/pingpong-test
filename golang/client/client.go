@@ -199,9 +199,12 @@ func main() {
 
 	var pipeline int = flagConfig.pipeline
 	// var totalPings int = 1000000
-	var totalPings int = 300000
+	var totalPings int = 500000
 	var concurrentConnections int = 100
 	var pingsPerConnection int = totalPings / (concurrentConnections * pipeline)
+	if pingsPerConnection <= 0 {
+		pingsPerConnection = 1
+	}
 	var actualTotalPings int = pingsPerConnection * concurrentConnections * pipeline
 	lockChan := make(chan bool, concurrentConnections)
 
