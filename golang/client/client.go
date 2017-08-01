@@ -16,15 +16,15 @@ import (
 )
 
 type FlagConfig struct {
-	processors  int
-	protocol    string
-	host        string
-	port        int
-	tcpAddr     string
-	pipeline    int
-	nodelay_str string
-	nodelay     bool
-	args        []string
+	processors int
+	protocol   string
+	host       string
+	port       int
+	tcpAddr    string
+	pipeline   int
+	nodelayStr string
+	nodelay    bool
+	args       []string
 }
 
 var flagConfig FlagConfig
@@ -35,7 +35,7 @@ func init() {
 	flag.StringVar(&flagConfig.host, "host", "localhost", "The IP address or domain name of host.")
 	flag.IntVar(&flagConfig.port, "port", 5178, "The port of host.")
 	flag.IntVar(&flagConfig.pipeline, "pipeline", 1, "The pipeline of ping one time.")
-	flag.StringVar(&flagConfig.nodelay_str, "nodelay", "false", "TCP is setting nodelay mode? options is [0,1] or [true,false].")
+	flag.StringVar(&flagConfig.nodelayStr, "nodelay", "false", "TCP is setting nodelay mode? options is [0,1] or [true,false].")
 }
 
 func initArgs() {
@@ -47,7 +47,7 @@ func initArgs() {
 	if flagConfig.pipeline <= 0 {
 		flagConfig.pipeline = 1
 	}
-	flagConfig.nodelay = parseBool(&flagConfig.nodelay_str, false)
+	flagConfig.nodelay = parseBool(&flagConfig.nodelayStr, false)
 	flagConfig.args = flag.Args()
 }
 
@@ -70,9 +70,46 @@ func parseArgs() {
 	printArgs()
 
 	if flagConfig.port <= 0 && flagConfig.port > 65535 {
-		fmt.Errorf("The port out of range [1, 65535]: %d\n", flagConfig.port)
+		err := fmt.Errorf("The port out of range [1, 65535]: %d\n", flagConfig.port)
+		fmt.Println(err)
 		os.Exit(1)
 	}
+}
+
+func setTCPSocketOptions(tcpConn *net.TCPConn, rdBufSize int, wrBufSize int, noDelay bool) {
+	err := tcpConn.SetNoDelay(noDelay)
+	if err != nil {
+		fmt.Println("SetNoDelay() [nodelay=", flagConfig.nodelay, "] error: ", err)
+	}
+
+	if rdBufSize >= 0 {
+		err = tcpConn.SetReadBuffer(rdBufSize)
+		if err != nil {
+			fmt.Println("SetReadBuffer() error: ", err)
+		}
+	}
+
+	if wrBufSize >= 0 {
+		err = tcpConn.SetWriteBuffer(wrBufSize)
+		if err != nil {
+			fmt.Println("SetWriteBuffer() error: ", err)
+		}
+	}
+}
+
+func setSocketOptions(conn net.Conn, rdBufSize int, wrBufSize int, noDelay bool) {
+	//
+	// See:	http://tonybai.com/2015/11/17/tcp-programming-in-golang/
+	// See: https://golang.org/pkg/net/#TCPConn.SetNoDelay
+	//
+	tcpConn, ok := conn.(*net.TCPConn)
+	if !ok {
+		// error handle
+		fmt.Println("TCPConn type assertion error.")
+		return
+	}
+
+	setTCPSocketOptions(tcpConn, rdBufSize, rdBufSize, noDelay)
 }
 
 func ping(times int, pipeline int, lockChan chan bool) {
@@ -81,28 +118,35 @@ func ping(times int, pipeline int, lockChan chan bool) {
 		log.Fatal("get TCP error: ", err)
 		panic(err)
 	}
-	conn, err := net.DialTCP(flagConfig.protocol, nil, tcpAddr)
+	tcpConn, err := net.DialTCP(flagConfig.protocol, nil, tcpAddr)
 	if err != nil {
 		log.Fatal("get DialTCP error: ", err)
 		panic(err)
 	}
 
-	if conn != nil {
-		err := conn.SetNoDelay(flagConfig.nodelay)
-		if err != nil {
-			log.Fatal("client tcp.SetNoDelay(", flagConfig.nodelay, ") error: ", err)
+	const READ_BUF_SIZE int = 160 * 1024
+	const WRITE_BUF_SIZE int = 160 * 1024
+
+	setTCPSocketOptions(tcpConn, READ_BUF_SIZE, WRITE_BUF_SIZE, flagConfig.nodelay)
+
+	/*
+		if tcpConn != nil {
+			err := tcpConn.SetNoDelay(flagConfig.nodelay)
+			if err != nil {
+				log.Fatal("client tcp.SetNoDelay() [nodelay=", flagConfig.nodelay, "] error: ", err)
+			}
 		}
-	}
+	*/
 
 	if pipeline == 1 {
 		for i := 0; i < times; i++ {
-			nwrite, err := conn.Write([]byte("Ping"))
+			nwrite, err := tcpConn.Write([]byte("Ping"))
 			if err != nil {
 				log.Fatal("get client write error: ", err)
 			}
 			var buff [4]byte
 			if nwrite > 0 {
-				nread, err := conn.Read(buff[0:])
+				nread, err := tcpConn.Read(buff[0:])
 				if nread <= 0 {
 					log.Fatal("Err: client read ", nread, " bytes")
 				}
@@ -112,11 +156,11 @@ func ping(times int, pipeline int, lockChan chan bool) {
 			}
 		}
 		lockChan <- true
-		conn.Close()
+		tcpConn.Close()
 	} else {
 		for i := 0; i < times; i++ {
 			for j := 0; j < pipeline; j++ {
-				nwrite, err := conn.Write([]byte("Ping"))
+				nwrite, err := tcpConn.Write([]byte("Ping"))
 				if nwrite <= 0 {
 					log.Fatal("Error: client write ", nwrite, " bytes")
 				}
@@ -126,7 +170,7 @@ func ping(times int, pipeline int, lockChan chan bool) {
 			}
 			var buff [4]byte
 			for j := 0; j < pipeline; j++ {
-				nread, err := conn.Read(buff[0:])
+				nread, err := tcpConn.Read(buff[0:])
 				if nread <= 0 {
 					log.Fatal("Error: client read ", nread, " bytes")
 				}
@@ -136,11 +180,13 @@ func ping(times int, pipeline int, lockChan chan bool) {
 			}
 		}
 		lockChan <- true
-		conn.Close()
+		tcpConn.Close()
 	}
 }
 
 func main() {
+	log.SetOutput(os.Stdout)
+
 	parseArgs()
 
 	fullProcessors := runtime.GOMAXPROCS(flagConfig.processors)
