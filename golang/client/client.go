@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-type FlagConfig struct {
+type sFlagConfig struct {
 	processors int
 	protocol   string
 	host       string
@@ -27,7 +27,7 @@ type FlagConfig struct {
 	args       []string
 }
 
-var flagConfig FlagConfig
+var flagConfig sFlagConfig
 
 func init() {
 	flag.IntVar(&flagConfig.processors, "thread-num", -1, "The number of work thread.")
@@ -124,10 +124,10 @@ func ping(times int, pipeline int, lockChan chan bool) {
 		panic(err)
 	}
 
-	const kReadBufSize int = 160 * 1024
-	const kWriteBufSize int = 160 * 1024
+	const readBufSize int = 160 * 1024
+	const writeBufSize int = 160 * 1024
 
-	setTCPSocketOptions(tcpConn, kReadBufSize, kWriteBufSize, flagConfig.nodelay)
+	setTCPSocketOptions(tcpConn, readBufSize, writeBufSize, flagConfig.nodelay)
 
 	/*
 		if tcpConn != nil {
@@ -197,19 +197,18 @@ func main() {
 	}
 	fmt.Printf("\n")
 
-	var pipeline int = flagConfig.pipeline
-	// var totalPings int = 1000000
-	var totalPings int = 400000
-	var concurrentConnections int = 100
-	var pingsPerConnection int = totalPings / (concurrentConnections * pipeline)
+	const totalPings int = 400000
+	const concurrentConnections int = 100
+	pipeline := flagConfig.pipeline
+	var pingsPerConnection = totalPings / (concurrentConnections * pipeline)
 	if pingsPerConnection <= 0 {
 		pingsPerConnection = 1
 	}
-	var actualTotalPings int = pingsPerConnection * concurrentConnections * pipeline
+	var actualTotalPings = pingsPerConnection * concurrentConnections * pipeline
 	lockChan := make(chan bool, concurrentConnections)
 
 	tcpAddr, err := net.ResolveTCPAddr(flagConfig.protocol, flagConfig.tcpAddr)
-	if err != nil {
+	if err != nil  {
 		log.Fatal("get TCP error: ", err)
 		panic(err)
 	}

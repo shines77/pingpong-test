@@ -149,10 +149,10 @@ func pong(conn net.Conn, pipeline int) {
 func handleClient(conn net.Conn, pipeline int) {
 	defer conn.Close()
 
-	const kReadBufSize int = 160 * 1024
-	const kWriteBufSize int = 160 * 1024
+	const readBufSize int = 160 * 1024
+	const writeBufSize int = 160 * 1024
 
-	setSocketOptions(conn, kReadBufSize, kWriteBufSize, flagConfig.nodelay)
+	setSocketOptions(conn, readBufSize, writeBufSize, flagConfig.nodelay)
 
 	/*
 		tcp := conn.(*net.TCPConn)

@@ -28,11 +28,11 @@ func formatBool(b *bool) string {
 	}
 }
 
-func parseBool(str *string, default_val bool) bool {
+func parseBool(str *string, defaultVal bool) bool {
 	if str == nil {
-		return default_val
+		return defaultVal
 	} else if strings.TrimSpace(*str) == "" {
-		return default_val
+		return defaultVal
 	} else {
 		boolstr := strings.TrimSpace(*str)
 		boolstr = strings.ToLower(boolstr)
@@ -45,7 +45,7 @@ func parseBool(str *string, default_val bool) bool {
 			if err != nil && val != 0 {
 				return true
 			} else {
-				return default_val
+				return defaultVal
 			}
 		}
 	}
