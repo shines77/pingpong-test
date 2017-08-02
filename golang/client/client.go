@@ -208,7 +208,7 @@ func main() {
 	lockChan := make(chan bool, concurrentConnections)
 
 	tcpAddr, err := net.ResolveTCPAddr(flagConfig.protocol, flagConfig.tcpAddr)
-	if err != nil  {
+	if err != nil {
 		log.Fatal("get TCP error: ", err)
 		panic(err)
 	}
