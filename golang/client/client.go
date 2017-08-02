@@ -76,28 +76,28 @@ func parseArgs() {
 	}
 }
 
-func setTCPSocketOptions(tcpConn *net.TCPConn, rdBufSize int, wrBufSize int, noDelay bool) {
+func setTCPSocketOptions(tcpConn *net.TCPConn, readBufSize int, writeBufSize int, noDelay bool) {
 	err := tcpConn.SetNoDelay(noDelay)
 	if err != nil {
 		fmt.Println("SetNoDelay() [nodelay=", flagConfig.nodelay, "] error: ", err)
 	}
 
-	if rdBufSize >= 0 {
-		err = tcpConn.SetReadBuffer(rdBufSize)
+	if readBufSize >= 0 {
+		err = tcpConn.SetReadBuffer(readBufSize)
 		if err != nil {
 			fmt.Println("SetReadBuffer() error: ", err)
 		}
 	}
 
-	if wrBufSize >= 0 {
-		err = tcpConn.SetWriteBuffer(wrBufSize)
+	if writeBufSize >= 0 {
+		err = tcpConn.SetWriteBuffer(writeBufSize)
 		if err != nil {
 			fmt.Println("SetWriteBuffer() error: ", err)
 		}
 	}
 }
 
-func setSocketOptions(conn net.Conn, rdBufSize int, wrBufSize int, noDelay bool) {
+func setSocketOptions(conn net.Conn, readBufSize int, writeBufSize int, noDelay bool) {
 	//
 	// See:	http://tonybai.com/2015/11/17/tcp-programming-in-golang/
 	// See: https://golang.org/pkg/net/#TCPConn.SetNoDelay
@@ -109,25 +109,25 @@ func setSocketOptions(conn net.Conn, rdBufSize int, wrBufSize int, noDelay bool)
 		return
 	}
 
-	setTCPSocketOptions(tcpConn, rdBufSize, rdBufSize, noDelay)
+	setTCPSocketOptions(tcpConn, readBufSize, writeBufSize, noDelay)
 }
 
 func ping(times int, pipeline int, lockChan chan bool) {
-	tcpAddr, err := net.ResolveTCPAddr(flagConfig.protocol, flagConfig.tcpAddr)
+	remoteAddr, err := net.ResolveTCPAddr(flagConfig.protocol, flagConfig.tcpAddr)
 	if err != nil {
 		log.Fatal("get TCP error: ", err)
 		panic(err)
 	}
-	tcpConn, err := net.DialTCP(flagConfig.protocol, nil, tcpAddr)
+	tcpConn, err := net.DialTCP(flagConfig.protocol, nil, remoteAddr)
 	if err != nil {
 		log.Fatal("get DialTCP error: ", err)
 		panic(err)
 	}
 
-	const READ_BUF_SIZE int = 160 * 1024
-	const WRITE_BUF_SIZE int = 160 * 1024
+	const kReadBufSize int = 160 * 1024
+	const kWriteBufSize int = 160 * 1024
 
-	setTCPSocketOptions(tcpConn, READ_BUF_SIZE, WRITE_BUF_SIZE, flagConfig.nodelay)
+	setTCPSocketOptions(tcpConn, kReadBufSize, kWriteBufSize, flagConfig.nodelay)
 
 	/*
 		if tcpConn != nil {
@@ -199,7 +199,7 @@ func main() {
 
 	var pipeline int = flagConfig.pipeline
 	// var totalPings int = 1000000
-	var totalPings int = 500000
+	var totalPings int = 400000
 	var concurrentConnections int = 100
 	var pingsPerConnection int = totalPings / (concurrentConnections * pipeline)
 	if pingsPerConnection <= 0 {

@@ -14,7 +14,7 @@ import (
 	"strings"
 )
 
-type FlagConfig struct {
+type sFlagConfig struct {
 	processors int
 	protocol   string
 	host       string
@@ -26,7 +26,7 @@ type FlagConfig struct {
 	args       []string
 }
 
-var flagConfig FlagConfig
+var flagConfig sFlagConfig
 
 func init() {
 	flag.IntVar(&flagConfig.processors, "thread-num", -1, "The number of work thread.")
@@ -75,28 +75,28 @@ func parseArgs() {
 	}
 }
 
-func setTCPSocketOptions(tcpConn *net.TCPConn, rdBufSize int, wrBufSize int, noDelay bool) {
+func setTCPSocketOptions(tcpConn *net.TCPConn, readBufSize int, writeBufSize int, noDelay bool) {
 	err := tcpConn.SetNoDelay(noDelay)
 	if err != nil {
 		fmt.Println("SetNoDelay() [nodelay=", flagConfig.nodelay, "] error: ", err)
 	}
 
-	if rdBufSize >= 0 {
-		err = tcpConn.SetReadBuffer(rdBufSize)
+	if readBufSize >= 0 {
+		err = tcpConn.SetReadBuffer(readBufSize)
 		if err != nil {
 			fmt.Println("SetReadBuffer() error: ", err)
 		}
 	}
 
-	if wrBufSize >= 0 {
-		err = tcpConn.SetWriteBuffer(wrBufSize)
+	if writeBufSize >= 0 {
+		err = tcpConn.SetWriteBuffer(writeBufSize)
 		if err != nil {
 			fmt.Println("SetWriteBuffer() error: ", err)
 		}
 	}
 }
 
-func setSocketOptions(conn net.Conn, rdBufSize int, wrBufSize int, noDelay bool) {
+func setSocketOptions(conn net.Conn, readBufSize int, writeBufSize int, noDelay bool) {
 	//
 	// See:	http://tonybai.com/2015/11/17/tcp-programming-in-golang/
 	// See: https://golang.org/pkg/net/#TCPConn.SetNoDelay
@@ -108,27 +108,10 @@ func setSocketOptions(conn net.Conn, rdBufSize int, wrBufSize int, noDelay bool)
 		return
 	}
 
-	setTCPSocketOptions(tcpConn, rdBufSize, rdBufSize, noDelay)
+	setTCPSocketOptions(tcpConn, readBufSize, writeBufSize, noDelay)
 }
 
-func handleClient(conn net.Conn, pipeline int) {
-	defer conn.Close()
-
-	const READ_BUF_SIZE int = 160 * 1024
-	const WRITE_BUF_SIZE int = 160 * 1024
-
-	setSocketOptions(conn, READ_BUF_SIZE, WRITE_BUF_SIZE, flagConfig.nodelay)
-
-	/*
-		tcp := conn.(*net.TCPConn)
-		if tcp != nil {
-			err := tcp.SetNoDelay(flagConfig.nodelay)
-			if err != nil {
-				log.Fatal("client tcp.SetNoDelay() [nodelay=", flagConfig.nodelay, "] error: ", err)
-			}
-		}
-	*/
-
+func pong(conn net.Conn, pipeline int) {
 	var buf [4]byte
 
 	if pipeline == 1 {
@@ -161,6 +144,27 @@ func handleClient(conn net.Conn, pipeline int) {
 			}
 		}
 	}
+}
+
+func handleClient(conn net.Conn, pipeline int) {
+	defer conn.Close()
+
+	const kReadBufSize int = 160 * 1024
+	const kWriteBufSize int = 160 * 1024
+
+	setSocketOptions(conn, kReadBufSize, kWriteBufSize, flagConfig.nodelay)
+
+	/*
+		tcp := conn.(*net.TCPConn)
+		if tcp != nil {
+			err := tcp.SetNoDelay(flagConfig.nodelay)
+			if err != nil {
+				log.Fatal("client tcp.SetNoDelay() [nodelay=", flagConfig.nodelay, "] error: ", err)
+			}
+		}
+	*/
+
+	pong(conn, pipeline)
 }
 
 func main() {
