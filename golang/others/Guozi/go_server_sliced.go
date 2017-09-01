@@ -1,6 +1,6 @@
 package main
 
-import(
+import (
 	"fmt"
 	"log"
 	"net"
@@ -41,12 +41,12 @@ func setSocketOptions(conn net.Conn, bufSize int, noDelay bool) {
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	BUF_SIZE := 160 * 1024
+	const bufSize int = 160 * 1024
 
-	setSocketOptions(conn, 160 * 1024, false);
-	setSocketOptions(conn, -1, false);
+	//setSocketOptions(conn, bufSize, false);
+	setSocketOptions(conn, -1, false)
 
-	buf := make([]byte, BUF_SIZE)
+	buf := make([]byte, bufSize)
 	for {
 		n, err := conn.Read(buf)
 		if err != nil {
@@ -54,15 +54,15 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 
-		if n != BUF_SIZE {
+		if n != bufSize {
 			fmt.Println("Receive Bytes: ", n)
 		}
 
-//		_, err1 := conn.Write(buf[0:n])
-//		if err1 != nil {
-//			fmt.Println("write error: ", err)
-//			return
-//		}
+		//		_, err1 := conn.Write(buf[0:n])
+		//		if err1 != nil {
+		//			fmt.Println("write error: ", err)
+		//			return
+		//		}
 
 		for pos := 0; pos < n; pos += 64 {
 			end := pos + 64
